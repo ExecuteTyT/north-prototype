@@ -661,10 +661,16 @@ button { font: inherit; cursor: pointer; border: none; background: none; color: 
   gap: 16px;
   padding: 0 var(--pad-gutter);
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
+  cursor: grab;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  user-select: none;
 }
 .landscapes-track::-webkit-scrollbar { display: none; }
+.landscapes-track.dragging { cursor: grabbing; scroll-behavior: auto; scroll-snap-type: none; }
 .landscape {
   flex: 0 0 clamp(280px, 42vw, 540px);
   scroll-snap-align: start;
@@ -1552,6 +1558,47 @@ document.querySelectorAll('.cfg-options').forEach(group => {
 });
 
 renderCfg();
+
+(() => {
+  const track = document.querySelector('.landscapes-track');
+  if (!track) return;
+
+  track.addEventListener('wheel', (e) => {
+    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+    if (!delta) return;
+    const atStart = track.scrollLeft <= 0 && delta < 0;
+    const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 1 && delta > 0;
+    if (atStart || atEnd) return;
+    e.preventDefault();
+    track.scrollLeft += delta;
+  }, { passive: false });
+
+  let isDown = false, moved = false, startX = 0, startScroll = 0;
+  track.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    isDown = true;
+    moved = false;
+    startX = e.clientX;
+    startScroll = track.scrollLeft;
+    track.classList.add('dragging');
+    track.setPointerCapture(e.pointerId);
+  });
+  track.addEventListener('pointermove', (e) => {
+    if (!isDown) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 3) moved = true;
+    track.scrollLeft = startScroll - dx;
+  });
+  const endDrag = (e) => {
+    if (!isDown) return;
+    isDown = false;
+    track.classList.remove('dragging');
+    try { track.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  track.addEventListener('pointerup', endDrag);
+  track.addEventListener('pointercancel', endDrag);
+  track.addEventListener('click', (e) => { if (moved) { e.preventDefault(); e.stopPropagation(); } }, true);
+})();
 </script>
 
 </body>
